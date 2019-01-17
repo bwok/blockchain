@@ -32,7 +32,7 @@ type channelValue struct {
 // checks the hash begins with the appropriate number of zero bits.
 // numZeroBits must be less than the number of bits in the hash.
 func hasHashPrefixBits(hash [64]byte, numZeroBits int) bool {
-	var numZeroBytes = numZeroBits/8
+	var numZeroBytes = numZeroBits / 8
 
 	// this many bytes should be all zero
 	for i := 0; i < numZeroBytes; i++ {
@@ -41,13 +41,13 @@ func hasHashPrefixBits(hash [64]byte, numZeroBits int) bool {
 		}
 	}
 
-	var remainderBits = uint(8-(numZeroBits%8))
+	var remainderBits = uint(8 - (numZeroBits % 8))
 
 	// check the remaining bits, if any.
 	if remainderBits == 0 {
 		return true
 	} else {
-		return hash[numZeroBytes] >> remainderBits == 0x0
+		return hash[numZeroBytes]>>remainderBits == 0x0
 	}
 }
 
@@ -122,7 +122,7 @@ func GenerateBlock(previousHash []byte, dataHash []byte, numPrefixZeros int) (ne
 					break
 				}
 			}
-		}(noncePartitionSize * uint64(i), i)
+		}(noncePartitionSize*uint64(i), i)
 	}
 
 	// close the hash channel when all goroutines are finished,
