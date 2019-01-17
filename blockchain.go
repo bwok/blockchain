@@ -9,7 +9,6 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 	"runtime"
 	"sync"
@@ -28,19 +27,6 @@ type Block struct {
 type channelValue struct {
 	hash  []byte
 	nonce uint64
-}
-
-// Checks that the block has a valid hash
-func CheckHash(block *Block) bool {
-	// Make a byte slice holding the bytes to hash, excluding the nonce bytes
-	bytesToHash := block.appendBytes()
-
-	nonceBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(nonceBytes, block.Nonce)
-	bytesToHash = append(bytesToHash, nonceBytes...)
-	newBlockHash := sha512.Sum512(bytesToHash)
-
-	return bytes.Equal(block.BlockHash, newBlockHash[:])
 }
 
 // checks the hash begins with the appropriate number of zero bits.
@@ -77,6 +63,19 @@ func (b *Block) appendBytes() (bytesToHash []byte) {
 	return
 }
 
+// Checks that the block has a valid hash
+func CheckHash(block *Block) bool {
+	// Make a byte slice holding the bytes to hash, excluding the nonce bytes
+	bytesToHash := block.appendBytes()
+
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, block.Nonce)
+	bytesToHash = append(bytesToHash, nonceBytes...)
+	newBlockHash := sha512.Sum512(bytesToHash)
+
+	return bytes.Equal(block.BlockHash, newBlockHash[:])
+}
+
 // calculates a new Block for the chain, returns a pointer to it
 func GenerateBlock(previousHash []byte, dataHash []byte, numPrefixZeros int) (newBlock Block, err error) {
 	newBlock = Block{}
@@ -106,20 +105,20 @@ func GenerateBlock(previousHash []byte, dataHash []byte, numPrefixZeros int) (ne
 		go func(startNonce uint64, chanNum int) {
 			defer wg.Done()
 			var maxNonce = startNonce + noncePartitionSize
+			var tempHashBytes = make([]byte, len(bytesToHash))
+			var nonceBytes = make([]byte, 8)
+			var newHash [64]byte
 
 			for ; startNonce < maxNonce && newBlock.BlockHash == nil; startNonce++ {
-				var tempHashBytes = make([]byte, len(bytesToHash))
-				var nonceBytes = make([]byte, 8)
-
 				binary.BigEndian.PutUint64(nonceBytes, startNonce)
+
+				tempHashBytes = tempHashBytes[:len(bytesToHash)]
 				copy(tempHashBytes, bytesToHash)
 				tempHashBytes = append(tempHashBytes, nonceBytes...)
-				newBlockHash := sha512.Sum512(tempHashBytes)
+				newHash = sha512.Sum512(tempHashBytes)
 
-
-				if hasHashPrefixBits(newBlockHash, numPrefixZeros) {
-					//fmt.Printf("\nChannel: %d\nGenerateBlock. Success.\nnonce was: %x\nbytes were: %x\nHash was %x\nEnding goroutine.\n\n", chanNum, nonceBytes, tempHashBytes, newBlockHash)
-					hashChan <- channelValue{newBlockHash[:], startNonce}
+				if hasHashPrefixBits(newHash, numPrefixZeros) {
+					hashChan <- channelValue{newHash[:], startNonce}
 					break
 				}
 			}
@@ -148,14 +147,4 @@ func GenerateBlock(previousHash []byte, dataHash []byte, numPrefixZeros int) (ne
 	}
 
 	return
-}
-
-
-// Nice formatting for the Block struct
-func (b *Block) String() string {
-	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "{\n")
-	fmt.Fprintf(&buf,"\tPreviousHash: %x\n\tDataHash: %x\n\tTimestamp: %d\n\tNonce: %d\n\tBlockHash: %x\n", b.PreviousHash, b.DataHash, b.Timestamp, b.Nonce, b.BlockHash)
-	fmt.Fprintf(&buf, "}")
-	return buf.String()
 }
