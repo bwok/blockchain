@@ -1,9 +1,15 @@
 package blockchain
 
+// package blockchain is a library to generate and check 512 bit blockchain hashes.
+// bytes that get hashed are appended in the following order before hashing:
+// previous hash, hash of the data in the blockchain, timestamp bytes, nonce bytes.
+
 import (
+	"bytes"
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math"
 	"runtime"
 	"sync"
@@ -24,12 +30,23 @@ type channelValue struct {
 	nonce uint64
 }
 
+// Checks that the block has a valid hash
+func CheckHash(block *Block) bool {
+	// Make a byte slice holding the bytes to hash, excluding the nonce bytes
+	bytesToHash := block.appendBytes()
+
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, block.Nonce)
+	bytesToHash = append(bytesToHash, nonceBytes...)
+	newBlockHash := sha512.Sum512(bytesToHash)
+
+	return bytes.Equal(block.BlockHash, newBlockHash[:])
+}
 
 // checks the hash begins with the appropriate number of zero bits.
 // numZeroBits must be less than the number of bits in the hash.
-func hasHashPrefixBits(hash []byte, numZeroBits int) bool {
+func hasHashPrefixBits(hash [64]byte, numZeroBits int) bool {
 	var numZeroBytes = numZeroBits/8
-	var remainderBits = uint(8-(numZeroBits%8))
 
 	// this many bytes should be all zero
 	for i := 0; i < numZeroBytes; i++ {
@@ -37,6 +54,8 @@ func hasHashPrefixBits(hash []byte, numZeroBits int) bool {
 			return false
 		}
 	}
+
+	var remainderBits = uint(8-(numZeroBits%8))
 
 	// check the remaining bits, if any.
 	if remainderBits == 0 {
@@ -46,6 +65,17 @@ func hasHashPrefixBits(hash []byte, numZeroBits int) bool {
 	}
 }
 
+// Make a byte slice holding the bytes to hash, excluding the nonce bytes.
+func (b *Block) appendBytes() (bytesToHash []byte) {
+	bytesToHash = append(bytesToHash, b.PreviousHash...)
+	bytesToHash = append(bytesToHash, b.DataHash...)
+
+	// add the timestamp bytes to the byte slice
+	timeStampBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(timeStampBytes, uint64(b.Timestamp))
+	bytesToHash = append(bytesToHash, timeStampBytes...)
+	return
+}
 
 // calculates a new Block for the chain, returns a pointer to it
 func GenerateBlock(previousHash []byte, dataHash []byte, numPrefixZeros int) (newBlock Block, err error) {
@@ -61,14 +91,7 @@ func GenerateBlock(previousHash []byte, dataHash []byte, numPrefixZeros int) (ne
 	newBlock.DataHash = dataHash
 
 	// Make a byte slice holding the bytes to hash, excluding the nonce bytes
-	var bytesToHash []byte
-	bytesToHash = append(bytesToHash, previousHash...)
-	bytesToHash = append(bytesToHash, newBlock.DataHash...)
-
-	// add the timestamp bytes to the byte slice
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(newBlock.Timestamp))
-	bytesToHash = append(bytesToHash, b...)
+	bytesToHash := newBlock.appendBytes()
 
 	// start the goroutine hash calculations.
 	var numHashRoutines = runtime.NumCPU()                                 // The number of goroutines calculating nonce that will be started
@@ -80,23 +103,27 @@ func GenerateBlock(previousHash []byte, dataHash []byte, numPrefixZeros int) (ne
 		wg.Add(1)
 
 		// start each hash routine at the start of a nonce partition
-		go func(startNonce uint64) {
+		go func(startNonce uint64, chanNum int) {
 			defer wg.Done()
 			var maxNonce = startNonce + noncePartitionSize
-			var tempHashBytes []byte
-			nonceBytes := make([]byte, 8)
 
 			for ; startNonce < maxNonce && newBlock.BlockHash == nil; startNonce++ {
+				var tempHashBytes = make([]byte, len(bytesToHash))
+				var nonceBytes = make([]byte, 8)
+
 				binary.BigEndian.PutUint64(nonceBytes, startNonce)
-				tempHashBytes = append(bytesToHash, nonceBytes...)
+				copy(tempHashBytes, bytesToHash)
+				tempHashBytes = append(tempHashBytes, nonceBytes...)
 				newBlockHash := sha512.Sum512(tempHashBytes)
 
-				if hasHashPrefixBits(newBlockHash[:], numPrefixZeros) {
+
+				if hasHashPrefixBits(newBlockHash, numPrefixZeros) {
+					//fmt.Printf("\nChannel: %d\nGenerateBlock. Success.\nnonce was: %x\nbytes were: %x\nHash was %x\nEnding goroutine.\n\n", chanNum, nonceBytes, tempHashBytes, newBlockHash)
 					hashChan <- channelValue{newBlockHash[:], startNonce}
 					break
 				}
 			}
-		}(noncePartitionSize * uint64(i))
+		}(noncePartitionSize * uint64(i), i)
 	}
 
 	// close the hash channel when all goroutines are finished,
@@ -121,4 +148,14 @@ func GenerateBlock(previousHash []byte, dataHash []byte, numPrefixZeros int) (ne
 	}
 
 	return
+}
+
+
+// Nice formatting for the Block struct
+func (b *Block) String() string {
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "{\n")
+	fmt.Fprintf(&buf,"\tPreviousHash: %x\n\tDataHash: %x\n\tTimestamp: %d\n\tNonce: %d\n\tBlockHash: %x\n", b.PreviousHash, b.DataHash, b.Timestamp, b.Nonce, b.BlockHash)
+	fmt.Fprintf(&buf, "}")
+	return buf.String()
 }
