@@ -1,12 +1,8 @@
 package blockchain
 
 import (
-	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
-	"io"
-	"log"
-	"os"
 	"testing"
 )
 
@@ -23,7 +19,7 @@ func TestCheckHash(t *testing.T) {
 		b    Block
 		want bool
 	}{
-		{	// previous hash = []
+		{ // previous hash = []
 			b: Block{
 				PreviousHash: convHexToByes(""),
 				DataHash:     convHexToByes("a6e7426704cbf59dd5ddaf574c5409988df6baf7f0467f482de7a98a6c4556f8c6a99b2a8d17cbf193001d8813aca4091306ec795a013d8b6754beb4098374f6"),
@@ -33,7 +29,7 @@ func TestCheckHash(t *testing.T) {
 			},
 			want: true,
 		},
-		{	// previous hash = nil
+		{ // previous hash = nil
 			b: Block{
 				PreviousHash: nil,
 				DataHash:     convHexToByes("a6e7426704cbf59dd5ddaf574c5409988df6baf7f0467f482de7a98a6c4556f8c6a99b2a8d17cbf193001d8813aca4091306ec795a013d8b6754beb4098374f6"),
@@ -96,9 +92,8 @@ func TestCheckHash(t *testing.T) {
 			want: true,
 		},
 
-
 		// invalid, all should return false when checked as they contain modified values
-		{	// wrong previous hash
+		{ // wrong previous hash
 			b: Block{
 				PreviousHash: convHexToByes("010006ded5eda75721b4c3a01be20c0dd9b2f41e8469eaf321e8f52a83143df19e97b57e4258b3f164e0d2e606426a2f5b42dd673cd5b96d5d2b9277d3a6fbda"),
 				DataHash:     convHexToByes("a6e7426704cbf59dd5ddaf574c5409988df6baf7f0467f482de7a98a6c4556f8c6a99b2a8d17cbf193001d8813aca4091306ec795a013d8b6754beb4098374f6"),
@@ -108,7 +103,7 @@ func TestCheckHash(t *testing.T) {
 			},
 			want: false,
 		},
-		{	// wrong data hash
+		{ // wrong data hash
 			b: Block{
 				PreviousHash: convHexToByes("000006ded5eda75721b4c3a01be20c0dd9b2f41e8469eaf321e8f52a83143df19e97b57e4258b3f164e0d2e606426a2f5b42dd673cd5b96d5d2b9277d3a6fbda"),
 				DataHash:     convHexToByes("a7e7426704cbf59dd5ddaf574c5409988df6baf7f0467f482de7a98a6c4556f8c6a99b2a8d17cbf193001d8813aca4091306ec795a013d8b6754beb4098374f6"),
@@ -118,7 +113,7 @@ func TestCheckHash(t *testing.T) {
 			},
 			want: false,
 		},
-		{	// wrong timestamp
+		{ // wrong timestamp
 			b: Block{
 				PreviousHash: convHexToByes("000006ded5eda75721b4c3a01be20c0dd9b2f41e8469eaf321e8f52a83143df19e97b57e4258b3f164e0d2e606426a2f5b42dd673cd5b96d5d2b9277d3a6fbda"),
 				DataHash:     convHexToByes("a6e7426704cbf59dd5ddaf574c5409988df6baf7f0467f482de7a98a6c4556f8c6a99b2a8d17cbf193001d8813aca4091306ec795a013d8b6754beb4098374f6"),
@@ -128,7 +123,7 @@ func TestCheckHash(t *testing.T) {
 			},
 			want: false,
 		},
-		{	// wrong nonce
+		{ // wrong nonce
 			b: Block{
 				PreviousHash: convHexToByes("000006ded5eda75721b4c3a01be20c0dd9b2f41e8469eaf321e8f52a83143df19e97b57e4258b3f164e0d2e606426a2f5b42dd673cd5b96d5d2b9277d3a6fbda"),
 				DataHash:     convHexToByes("a6e7426704cbf59dd5ddaf574c5409988df6baf7f0467f482de7a98a6c4556f8c6a99b2a8d17cbf193001d8813aca4091306ec795a013d8b6754beb4098374f6"),
@@ -138,7 +133,7 @@ func TestCheckHash(t *testing.T) {
 			},
 			want: false,
 		},
-		{	// wrong block hash
+		{ // wrong block hash
 			b: Block{
 				PreviousHash: convHexToByes("000006ded5eda75721b4c3a01be20c0dd9b2f41e8469eaf321e8f52a83143df19e97b57e4258b3f164e0d2e606426a2f5b42dd673cd5b96d5d2b9277d3a6fbda"),
 				DataHash:     convHexToByes("a6e7426704cbf59dd5ddaf574c5409988df6baf7f0467f482de7a98a6c4556f8c6a99b2a8d17cbf193001d8813aca4091306ec795a013d8b6754beb4098374f6"),
@@ -210,22 +205,10 @@ func TestGenerateBlock(t *testing.T) {
 }
 
 func BenchmarkGenerateBlock(b *testing.B) {
-	//var oldHash = "f4478aa868071a0424ce4a90cd5b48d781e15971e383ad1a9044fc7c8318d5bd6cba5d9712a42723de9f1c2d3e797184f575282d21a614c5b6bdfdd0d5204aec"
-	var oldHash string
-	file, err := os.Open("testLedger")
-	if err != nil {
-		return
-	}
-	defer file.Close()
-
-	// calculate the hash of the input data
-	hasher := sha512.New()
-	if _, err = io.Copy(hasher, file); err != nil {
-		log.Fatal(err)
-	}
-	dataHash := hasher.Sum(nil)
+	var oldHash, _ = hex.DecodeString("f4478aa868071a0424ce4a90cd5b48d781e15971e383ad1a9044fc7c8318d5bd6cba5d9712a42723de9f1c2d3e797184f575282d21a614c5b6bdfdd0d5204aec")
+	var dataHash, _ = hex.DecodeString("a6e7426704cbf59dd5ddaf574c5409988df6baf7f0467f482de7a98a6c4556f8c6a99b2a8d17cbf193001d8813aca4091306ec795a013d8b6754beb4098374f6")
 
 	for i := 0; i < b.N; i++ {
-		GenerateBlock([]byte(oldHash), dataHash[:], 17)
+		GenerateBlock(oldHash, dataHash[:], 10)
 	}
 }

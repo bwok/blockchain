@@ -29,6 +29,12 @@ type channelValue struct {
 	nonce uint64
 }
 
+var NumHashRoutines int // The number of goroutines calculating nonce that will be started
+
+func init() {
+	NumHashRoutines = runtime.NumCPU() // Default to the number of CPUs, but leave it user configurable.
+}
+
 // checks the hash begins with the appropriate number of zero bits.
 // numZeroBits must be less than the number of bits in the hash.
 func hasHashPrefixBits(hash [64]byte, numZeroBits int) bool {
@@ -52,7 +58,7 @@ func hasHashPrefixBits(hash [64]byte, numZeroBits int) bool {
 }
 
 // Make a byte slice holding the bytes to hash, excluding the nonce bytes.
-func (b *Block) appendBytes() (bytesToHash []byte) {
+func (b *Block) concatBytes() (bytesToHash []byte) {
 	bytesToHash = append(bytesToHash, b.PreviousHash...)
 	bytesToHash = append(bytesToHash, b.DataHash...)
 
@@ -65,7 +71,7 @@ func (b *Block) appendBytes() (bytesToHash []byte) {
 
 // Checks that the block has a valid hash
 func CheckHash(block *Block) bool {
-	bytesToHash := block.appendBytes()
+	bytesToHash := block.concatBytes()
 
 	nonceBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(nonceBytes, block.Nonce)
@@ -93,19 +99,18 @@ func GenerateBlock(previousHash []byte, dataHash []byte, numPrefixZeros int) (ne
 	newBlock.DataHash = dataHash
 
 	// Make a byte slice holding the bytes to hash, excluding the nonce bytes
-	bytesToHash := newBlock.appendBytes()
+	bytesToHash := newBlock.concatBytes()
 
 	// start the goroutine hash calculations.
-	var numHashRoutines = runtime.NumCPU()                                 // The number of goroutines calculating nonce that will be started
 	var wg sync.WaitGroup                                                  // A waitgroup for all the hashing goroutines
-	hashChan := make(chan channelValue, numHashRoutines*2)                 // A channel to recieve valid hashes on
-	noncePartitionSize := uint64(math.MaxUint64 / uint64(numHashRoutines)) // split the nonce maximum value into sections, each goroutine gets a section to calculate.
+	hashChan := make(chan channelValue)                                    // A channel to recieve valid hashes on
+	noncePartitionSize := uint64(math.MaxUint64 / uint64(NumHashRoutines)) // split the nonce maximum value into sections, each goroutine gets a section to calculate.
 
-	for i := 0; i < numHashRoutines; i++ {
+	for i := 0; i < NumHashRoutines; i++ {
 		wg.Add(1)
 
 		// start each hash routine at the start of a nonce partition
-		go func(startNonce uint64, chanNum int) {
+		go func(startNonce uint64) {
 			defer wg.Done()
 			var maxNonce = startNonce + noncePartitionSize
 			var tempHashBytes = make([]byte, len(bytesToHash))
@@ -125,7 +130,7 @@ func GenerateBlock(previousHash []byte, dataHash []byte, numPrefixZeros int) (ne
 					break
 				}
 			}
-		}(noncePartitionSize*uint64(i), i)
+		}(noncePartitionSize*uint64(i))
 	}
 
 	// close the hash channel when all goroutines are finished,
