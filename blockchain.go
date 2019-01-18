@@ -65,7 +65,6 @@ func (b *Block) appendBytes() (bytesToHash []byte) {
 
 // Checks that the block has a valid hash
 func CheckHash(block *Block) bool {
-	// Make a byte slice holding the bytes to hash, excluding the nonce bytes
 	bytesToHash := block.appendBytes()
 
 	nonceBytes := make([]byte, 8)
@@ -80,8 +79,12 @@ func CheckHash(block *Block) bool {
 func GenerateBlock(previousHash []byte, dataHash []byte, numPrefixZeros int) (newBlock Block, err error) {
 	newBlock = Block{}
 
-	if numPrefixZeros > 64 {
-		err = errors.New("the number of prefix zero bits must be <= 64")
+	if numPrefixZeros < 0 || numPrefixZeros > 64 {
+		err = errors.New("the number of prefix zero bits must be > 0 and <= 64")
+		return
+	}
+	if len(dataHash) == 0 {
+		err = errors.New("the data hash was empty")
 		return
 	}
 
